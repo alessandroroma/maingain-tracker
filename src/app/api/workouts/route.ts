@@ -12,7 +12,6 @@ export async function GET(request: Request) {
     const exerciseId = searchParams.get("exercise_id");
     const limit = searchParams.get("limit");
 
-    // Fetch workouts with sets joined
     let query = supabase
       .from("workouts")
       .select(`*, workout_sets(*)`)
@@ -43,7 +42,6 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Exercise and sets are required" }, { status: 400 });
     }
 
-    // Upsert exercise
     const { data: ex } = await supabase
       .from("exercises")
       .select("id")
@@ -61,7 +59,6 @@ export async function POST(req: Request) {
     }
     if (!exerciseId) throw new Error("Failed to get exercise ID");
 
-    // Create workout
     const { data: workout } = await supabase
       .from("workouts")
       .insert({ date, name })
@@ -70,7 +67,6 @@ export async function POST(req: Request) {
 
     if (!workout?.id) throw new Error("Failed to create workout");
 
-    // Create sets
     const workoutSets = sets.map((s: Record<string, string>, i: number) => ({
       workout_id: workout.id,
       exercise_id: exerciseId,
@@ -84,6 +80,29 @@ export async function POST(req: Request) {
     await supabase.from("workout_sets").insert(workoutSets);
 
     return NextResponse.json({ workout_id: workout.id });
+  } catch (err: unknown) {
+    return NextResponse.json({ error: (err as Error).message }, { status: 500 });
+  }
+}
+
+export async function DELETE(request: Request) {
+  try {
+    if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
+      return NextResponse.json({ error: "Supabase not configured" }, { status: 500 });
+    }
+
+    const { searchParams } = new URL(request.url);
+    const id = searchParams.get("id");
+
+    if (!id) {
+      return NextResponse.json({ error: "ID is required" }, { status: 400 });
+    }
+
+    // Delete sets first, then workout (or use cascade if available)
+    await supabase.from("workout_sets").delete().eq("workout_id", id);
+    const { error } = await supabase.from("workouts").delete().eq("id", id);
+    if (error) throw error;
+    return NextResponse.json({ success: true });
   } catch (err: unknown) {
     return NextResponse.json({ error: (err as Error).message }, { status: 500 });
   }

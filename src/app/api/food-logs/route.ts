@@ -12,7 +12,6 @@ export async function GET(request: Request) {
     const days = searchParams.get("days");
 
     if (days) {
-      // Fetch daily totals for the last N days
       const endDate = new Date();
       const startDate = new Date();
       startDate.setDate(endDate.getDate() - parseInt(days));
@@ -26,7 +25,6 @@ export async function GET(request: Request) {
 
       if (error) throw error;
 
-      // Calculate daily totals
       const dailyTotals: Record<string, { calories: number; protein: number; carbs: number; fat: number; items: number }> = {};
       (data || []).forEach((f) => {
         if (!dailyTotals[f.date]) {
@@ -45,7 +43,6 @@ export async function GET(request: Request) {
       });
     }
 
-    // Single date or all logs
     let query = supabase.from("food_logs").select("*").order("date", { ascending: false }).limit(200);
     if (date) query = query.eq("date", date);
 
@@ -78,6 +75,27 @@ export async function POST(req: Request) {
 
     if (error) throw error;
     return NextResponse.json(data);
+  } catch (err: unknown) {
+    return NextResponse.json({ error: (err as Error).message }, { status: 500 });
+  }
+}
+
+export async function DELETE(request: Request) {
+  try {
+    if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
+      return NextResponse.json({ error: "Supabase not configured" }, { status: 500 });
+    }
+
+    const { searchParams } = new URL(request.url);
+    const id = searchParams.get("id");
+
+    if (!id) {
+      return NextResponse.json({ error: "ID is required" }, { status: 400 });
+    }
+
+    const { error } = await supabase.from("food_logs").delete().eq("id", id);
+    if (error) throw error;
+    return NextResponse.json({ success: true });
   } catch (err: unknown) {
     return NextResponse.json({ error: (err as Error).message }, { status: 500 });
   }
