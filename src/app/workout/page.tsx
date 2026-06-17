@@ -13,7 +13,7 @@ interface WorkoutSet {
   reps: number;
   rpe?: number;
   rir?: number;
-  exercises?: { name: string; muscle_group?: string };
+  exercises?: { name: string };
 }
 
 interface Workout {
@@ -21,20 +21,22 @@ interface Workout {
   date: string;
   name: string;
   workout_sets: WorkoutSet[];
-  exercises?: { id: string; name: string; muscle_group?: string };
 }
 
 interface PreviousSet {
   date: string;
   weight: number;
   reps: number;
+  exercise_id: string;
+  exercises?: { name: string };
 }
 
 export default function WorkoutPage() {
   const [workouts, setWorkouts] = useState<Workout[]>([]);
   const [previousSets, setPreviousSets] = useState<PreviousSet[]>([]);
   const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
+  const [deleting, setDeleting] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split("T")[0]);
 
   useEffect(() => {
@@ -43,26 +45,26 @@ export default function WorkoutPage() {
 
   async function loadWorkouts() {
     setLoading(true);
+    setError(null);
     try {
-      // Fetch recent workouts with sets
-      const { data: recentWorkouts } = await supabase
+      const { data: recentWorkouts, error: fetchErr } = await supabase
         .from("workouts")
         .select(`*, workout_sets(*)`)
         .order("date", { ascending: false })
         .limit(10);
 
+      if (fetchErr) throw fetchErr;
+
       if (recentWorkouts) {
-        // Attach exercise names
-        const enriched = recentWorkouts.map((w) => {
-          const sets = (w.workout_sets || []).map((ws) => {
-            // Try to get exercise info from a separate query
-            return ws as unknown as WorkoutSet & { exercises?: { name: string } };
-          });
-          return { ...w, workout_sets: sets } as Workout;
-        });
+        const enriched = recentWorkouts.map((w) => ({
+          ...w,
+          workout_sets: (w.workout_sets || []).map((ws) => ({
+            ...ws,
+            exercises: { name: ws.exercises?.name || "Exercise" },
+          })) as WorkoutSet[],
+        })) as Workout[];
         setWorkouts(enriched);
 
-        // Also get workout_sets directly for previous performance lookup
         const { data: allSets } = await supabase
           .from("workout_sets")
           .select("*, workouts(date), exercises(name)")
@@ -70,8 +72,8 @@ export default function WorkoutPage() {
 
         if (allSets) setPreviousSets(allSets as unknown as PreviousSet[]);
       }
-    } catch (err) {
-      console.error("Failed to load workouts:", err);
+    } catch (err: unknown) {
+      setError((err as Error).message);
     } finally {
       setLoading(false);
     }
@@ -86,18 +88,28 @@ export default function WorkoutPage() {
       .order("name");
 
     if (data) {
-      const enriched = data.map((w) => ({
+      setWorkouts(data.map((w) => ({
         ...w,
-        workout_sets: (w.workout_sets || []).map((ws) => ws as WorkoutSet),
-      })) as Workout[];
-      setWorkouts(enriched);
+        workout_sets: (w.workout_sets || []).map((ws) => ({
+          ...ws,
+          exercises: { name: ws.exercises?.name || "Exercise" },
+        })) as WorkoutSet[],
+      })) as Workout[]);
     }
   }
 
   async function deleteWorkout(id: string) {
     if (!confirm("Delete this workout and all its sets?")) return;
-    await supabase.from("workouts").delete().eq("id", id);
-    loadWorkouts();
+    setDeleting(id);
+    setError(null);
+    try {
+      await fetch(`/api/workouts?id=${id}`, { method: "DELETE" });
+      loadWorkouts();
+    } catch (err: unknown) {
+      setError((err as Error).message);
+    } finally {
+      setDeleting(null);
+    }
   }
 
   const est1rm = (weight: number, reps: number) => {
@@ -115,19 +127,28 @@ export default function WorkoutPage() {
     <main className="max-w-lg mx-auto px-4 py-8 space-y-6">
       <h1 className="text-2xl font-bold">Workout Log</h1>
 
+      {error && (
+        <div className="bg-red-500/10 border border-red-500/30 text-red-400 px-4 py-3 rounded-lg text-sm">
+          {error}
+        </div>
+      )}
+
       {/* Date Picker */}
       <div className="flex gap-3 items-center">
         <input type="date" value={selectedDate} onChange={(e) => loadWorkoutsForDate(e.target.value)}
           className="bg-card border border-border rounded px-3 py-2 text-foreground" />
-        <button onClick={() => loadWorkouts()} disabled={refreshing}
+        <button onClick={() => loadWorkouts()} disabled={loading}
           className="text-muted hover:text-foreground transition text-sm">
-          {refreshing ? "↻" : "↻ Refresh"}
+          {loading ? "↻" : "↻ Refresh"}
         </button>
       </div>
 
       {/* Recent Workouts */}
       {loading ? (
-        <p className="text-muted text-center py-8">Loading...</p>
+        <div className="text-center py-12">
+          <div className="inline-block w-6 h-6 border-2 border-primary/50 border-t-primary rounded-full animate-spin" />
+          <p className="text-muted mt-2">Loading...</p>
+        </div>
       ) : (
         <>
           {Object.keys(groupedByDate).length > 0 ? (
@@ -142,7 +163,10 @@ export default function WorkoutPage() {
                     <div className="flex justify-between items-start mb-2">
                       <h3 className="font-medium">{workout.name}</h3>
                       <button onClick={() => deleteWorkout(workout.id)}
-                        className="text-xs text-red-400/60 hover:text-red-400 transition">Delete</button>
+                        disabled={deleting === workout.id}
+                        className="text-xs text-red-400/60 hover:text-red-400 transition disabled:opacity-50">
+                        {deleting === workout.id ? "⏳" : "Delete"}
+                      </button>
                     </div>
                     <div className="space-y-1">
                       {workout.workout_sets.map((ws) => (
@@ -156,7 +180,6 @@ export default function WorkoutPage() {
                         </div>
                       ))}
                     </div>
-                    {/* Volume total */}
                     <div className="flex justify-end text-xs text-muted mt-2">
                       Total: {workout.workout_sets.reduce((s, ws) => s + (ws.weight * ws.reps), 0).toLocaleString()} lbs
                     </div>
