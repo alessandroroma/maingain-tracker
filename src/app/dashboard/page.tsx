@@ -5,36 +5,111 @@ import { supabase } from "@/lib/supabase";
 import { WeightChart } from "@/components/charts/weight-chart";
 import { BodyLogForm } from "@/components/forms/body-log-form";
 
+interface BodyLog {
+  date: string;
+  bodyweight: number;
+  waist: number | null;
+}
+
+interface DailyFoodTotals {
+  calories: number;
+  protein: number;
+  carbs: number;
+  fat: number;
+}
+
 export default function DashboardPage() {
-  const [bodylogs, setBodyLogs] = useState<unknown[]>([]);
-  const [foodTotals, setFoodTotals] = useState<{ calories: number; protein: number } | null>(null);
+  const [bodylogs, setBodyLogs] = useState<BodyLog[]>([]);
+  const [todayTotals, setTodayTotals] = useState<DailyFoodTotals | null>(null);
+  const [weeklyTotals, setWeeklyTotals] = useState<DailyFoodTotals | null>(null);
+  const [workouts, setWorkouts] = useState<unknown[]>([]);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     async function fetchData() {
-      const today = new Date().toISOString().split("T")[0];
+      try {
+        const today = new Date().toISOString().split("T")[0];
+        const weekAgo = new Date();
+        weekAgo.setDate(weekAgo.getDate() - 7);
+        const weekAgoStr = weekAgo.toISOString().split("T")[0];
 
-      const { data: logs } = await supabase
-        .from("body_logs")
-        .select("*")
-        .order("date", { ascending: false })
-        .limit(30);
-      if (logs) setBodyLogs(logs);
+        // Body logs (30 days)
+        const { data: logs } = await supabase
+          .from("body_logs")
+          .select("*")
+          .order("date", { ascending: false })
+          .limit(30);
+        if (logs) setBodyLogs(logs);
 
-      const { data: foods } = await supabase
-        .from("food_logs")
-        .select("calories, protein")
-        .eq("date", today);
-      if (foods) {
-        setFoodTotals({
-          calories: foods.reduce((s, f) => s + (f.calories || 0), 0),
-          protein: foods.reduce((s, f) => s + (f.protein || 0), 0),
-        });
+        // Today's food totals
+        const { data: todayFoods } = await supabase
+          .from("food_logs")
+          .select("calories, protein, carbs, fat")
+          .eq("date", today);
+        if (todayFoods && todayFoods.length > 0) {
+          setTodayTotals({
+            calories: todayFoods.reduce((s, f) => s + (f.calories || 0), 0),
+            protein: todayFoods.reduce((s, f) => s + (f.protein || 0), 0),
+            carbs: todayFoods.reduce((s, f) => s + (f.carbs || 0), 0),
+            fat: todayFoods.reduce((s, f) => s + (f.fat || 0), 0),
+          });
+        }
+
+        // Last 7 days food totals
+        const { data: weekFoods } = await supabase
+          .from("food_logs")
+          .select("calories, protein, carbs, fat")
+          .gte("date", weekAgoStr)
+          .lt("date", today);
+        if (weekFoods && weekFoods.length > 0) {
+          const days = Math.max(1, (() => {
+            const first = new Set(weekFoods.map((f) => f.date)).size;
+            return first > 0 ? first : 1;
+          })());
+          setWeeklyTotals({
+            calories: weekFoods.reduce((s, f) => s + (f.calories || 0), 0) / days,
+            protein: weekFoods.reduce((s, f) => s + (f.protein || 0), 0) / days,
+            carbs: weekFoods.reduce((s, f) => s + (f.carbs || 0), 0) / days,
+            fat: weekFoods.reduce((s, f) => s + (f.fat || 0), 0) / days,
+          });
+        }
+
+        // Recent workouts
+        const { data: recentWorkouts } = await supabase
+          .from("workouts")
+          .select("*")
+          .order("date", { ascending: false })
+          .limit(10);
+        if (recentWorkouts) setWorkouts(recentWorkouts);
+
+      } catch (err) {
+        console.error("Dashboard fetch error:", err);
+      } finally {
+        setLoading(false);
       }
     }
     fetchData();
   }, []);
 
-  const weightData = (bodylogs as Array<{ date: string; bodyweight: number }>).map((l) => ({
+  // Calculate weekly weight change
+  const weeklyWeightChange = (() => {
+    if (bodylogs.length < 2) return null;
+    const sorted = [...bodylogs].sort((a, b) => a.date.localeCompare(b.date));
+    const firstHalf = sorted.slice(0, Math.floor(sorted.length / 2));
+    const secondHalf = sorted.slice(Math.floor(sorted.length / 2));
+    const avg1 = firstHalf.reduce((s, l) => s + l.bodyweight, 0) / firstHalf.length;
+    const avg2 = secondHalf.reduce((s, l) => s + l.bodyweight, 0) / secondHalf.length;
+    return avg2 - avg1;
+  })();
+
+  const latestLog = bodylogs.length > 0 ? bodylogs[0] : null;
+  const latestWaist = bodylogs.find((l) => l.waist !== null)?.waist ?? null;
+
+  // Next workout: find the next date after today that has a workout
+  const today = new Date().toISOString().split("T")[0];
+  const nextWorkout = workouts.find((w: { date: string }) => w.date > today);
+
+  const weightData = bodylogs.map((l) => ({
     date: l.date,
     weight: l.bodyweight,
     avg7: 0,
@@ -44,43 +119,58 @@ export default function DashboardPage() {
     <main className="max-w-4xl mx-auto px-4 py-8 space-y-6">
       <h1 className="text-2xl font-bold">Dashboard</h1>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div className="bg-card p-6 rounded-lg border border-border">
-          <h2 className="text-sm font-medium text-muted mb-2">Today&apos;s Calories</h2>
-          <p className="text-2xl font-bold">{foodTotals?.calories ?? "—"}</p>
-        </div>
-        <div className="bg-card p-6 rounded-lg border border-border">
-          <h2 className="text-sm font-medium text-muted mb-2">Today&apos;s Protein</h2>
-          <p className="text-2xl font-bold">{foodTotals?.protein ?? "—"} g</p>
-        </div>
-        <div className="bg-card p-6 rounded-lg border border-border">
-          <h2 className="text-sm font-medium text-muted mb-2">Latest Weight</h2>
-          <p className="text-2xl font-bold">
-            {(bodylogs as Array<{ bodyweight: number }>)?.[0]?.bodyweight?.toFixed(1) ?? "—"} lb
-          </p>
-        </div>
-      </div>
+      {loading ? (
+        <p className="text-muted text-center py-12">Loading...</p>
+      ) : (
+        <>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div className="bg-card p-5 rounded-lg border border-border">
+              <h2 className="text-sm font-medium text-muted mb-1">Weight</h2>
+              <p className="text-2xl font-bold">
+                {latestLog ? `${latestLog.bodyweight.toFixed(1)} lb` : "—"}
+              </p>
+            </div>
+            <div className="bg-card p-5 rounded-lg border border-border">
+              <h2 className="text-sm font-medium text-muted mb-1">Weekly Change</h2>
+              <p className={`text-2xl font-bold ${weeklyWeightChange && weeklyWeightChange > 0 ? "text-red-400" : weeklyWeightChange && weeklyWeightChange < 0 ? "text-green-400" : "text-muted"}`}>
+                {weeklyWeightChange != null ? `${weeklyWeightChange > 0 ? "+" : ""}${weeklyWeightChange.toFixed(1)} lb` : "—"}
+              </p>
+            </div>
+            <div className="bg-card p-5 rounded-lg border border-border">
+              <h2 className="text-sm font-medium text-muted mb-1">Today&apos;s Calories</h2>
+              <p className="text-2xl font-bold">{todayTotals?.calories ?? "—"}</p>
+            </div>
+            <div className="bg-card p-5 rounded-lg border border-border">
+              <h2 className="text-sm font-medium text-muted mb-1">Today&apos;s Protein</h2>
+              <p className="text-2xl font-bold">{todayTotals?.protein ?? "—"} g</p>
+            </div>
+          </div>
 
-      <div className="bg-card p-6 rounded-lg border border-border">
-        <h2 className="font-semibold mb-4">Weight Trend</h2>
-        <WeightChart data={weightData} />
-      </div>
+          <div className="bg-card p-6 rounded-lg border border-border">
+            <h2 className="font-semibold mb-4">Weight Trend</h2>
+            <WeightChart data={weightData} />
+          </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <div className="bg-card p-6 rounded-lg border border-border">
-          <h2 className="font-semibold mb-4">Log Bodyweight</h2>
-          <BodyLogForm />
-        </div>
-        <div className="bg-card p-6 rounded-lg border border-border">
-          <h2 className="font-semibold mb-4">Quick Stats</h2>
-          <ul className="space-y-2 text-sm">
-            <li className="flex justify-between"><span className="text-muted">Weekly weight change</span><span>—</span></li>
-            <li className="flex justify-between"><span className="text-muted">Latest waist</span><span>—</span></li>
-            <li className="flex justify-between"><span className="text-muted">Next workout</span><span>—</span></li>
-            <li className="flex justify-between"><span className="text-muted">Calorie rec.</span><span>—</span></li>
-          </ul>
-        </div>
-      </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="bg-card p-6 rounded-lg border border-border">
+              <h2 className="font-semibold mb-4">Log Bodyweight</h2>
+              <BodyLogForm />
+            </div>
+
+            <div className="bg-card p-6 rounded-lg border border-border">
+              <h2 className="font-semibold mb-4">Quick Stats</h2>
+              <ul className="space-y-3 text-sm">
+                <li className="flex justify-between"><span className="text-muted">Latest waist</span><span>{latestWaist != null ? `${latestWaist.toFixed(1)} in` : "—"}</span></li>
+                <li className="flex justify-between"><span className="text-muted">Weekly calorie avg</span><span>{weeklyTotals?.calories?.toFixed(0) ?? "—"}</span></li>
+                <li className="flex justify-between"><span className="text-muted">Weekly protein avg</span><span>{weeklyTotals?.protein?.toFixed(0) ?? "—"} g</span></li>
+                <li className="flex justify-between"><span className="text-muted">Weekly fat avg</span><span>{weeklyTotals?.fat?.toFixed(0) ?? "—"} g</span></li>
+                <li className="flex justify-between"><span className="text-muted">Next workout</span><span>{nextWorkout ? nextWorkout.date : "—"}</span></li>
+                <li className="flex justify-between"><span className="text-muted">Recent workouts</span><span>{workouts.length}</span></li>
+              </ul>
+            </div>
+          </div>
+        </>
+      )}
     </main>
   );
 }
