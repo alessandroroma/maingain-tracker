@@ -6,7 +6,9 @@ const navItems = [
   { href: "/dashboard", label: "Dashboard" },
   { href: "/workout", label: "Workout" },
   { href: "/food", label: "Food" },
+  { href: "/foods", label: "Foods" },
   { href: "/checkin", label: "Check-In" },
+  { href: "/checkin-history", label: "History" },
   { href: "/progress", label: "Progress" },
 ];
 
