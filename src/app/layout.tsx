@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import { Nav } from "@/components/navigation";
 
 export const metadata: Metadata = {
   title: "Maingain Tracker",
@@ -13,7 +14,10 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
-      <body className="min-h-screen">{children}</body>
+      <body className="min-h-screen bg-background">
+        <Nav />
+        {children}
+      </body>
     </html>
   );
 }
