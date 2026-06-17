@@ -24,6 +24,7 @@ export default function DashboardPage() {
   const [weeklyTotals, setWeeklyTotals] = useState<DailyFoodTotals | null>(null);
   const [workouts, setWorkouts] = useState<unknown[]>([]);
   const [loading, setLoading] = useState(true);
+  const [exporting, setExporting] = useState(false);
 
   useEffect(() => {
     async function fetchData() {
@@ -115,9 +116,35 @@ export default function DashboardPage() {
     avg7: 0,
   }));
 
+  async function handleExport() {
+    setExporting(true);
+    try {
+      const res = await fetch("/api/export");
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `maingain-export-${new Date().toISOString().split("T")[0]}.json`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error("Export failed:", err);
+    } finally {
+      setExporting(false);
+    }
+  }
+
   return (
     <main className="max-w-4xl mx-auto px-4 py-8 space-y-6">
-      <h1 className="text-2xl font-bold">Dashboard</h1>
+      <div className="flex justify-between items-center">
+        <h1 className="text-2xl font-bold">Dashboard</h1>
+        <button onClick={handleExport} disabled={exporting}
+          className="text-xs text-muted hover:text-foreground transition flex items-center gap-1">
+          {exporting ? "⏳" : "⬇"} Export Data
+        </button>
+      </div>
 
       {loading ? (
         <p className="text-muted text-center py-12">Loading...</p>
