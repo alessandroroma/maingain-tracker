@@ -1,8 +1,41 @@
 import { NextResponse } from "next/server";
 import { supabase } from "@/lib/supabase";
 
+export async function GET(request: Request) {
+  try {
+    if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
+      return NextResponse.json({ error: "Supabase not configured" }, { status: 500 });
+    }
+
+    const { searchParams } = new URL(request.url);
+    const date = searchParams.get("date");
+    const exerciseId = searchParams.get("exercise_id");
+    const limit = searchParams.get("limit");
+
+    // Fetch workouts with sets joined
+    let query = supabase
+      .from("workouts")
+      .select(`*, workout_sets(*)`)
+      .order("date", { ascending: false });
+
+    if (date) query = query.eq("date", date);
+    if (exerciseId) query = query.in("workout_sets.exercise_id", [exerciseId]);
+    if (limit) query = query.limit(parseInt(limit));
+
+    const { data, error } = await query;
+    if (error) throw error;
+    return NextResponse.json(data);
+  } catch (err: unknown) {
+    return NextResponse.json({ error: (err as Error).message }, { status: 500 });
+  }
+}
+
 export async function POST(req: Request) {
   try {
+    if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
+      return NextResponse.json({ error: "Supabase not configured" }, { status: 500 });
+    }
+
     const body = await req.json();
     const { date, name, exercise, sets } = body;
 
