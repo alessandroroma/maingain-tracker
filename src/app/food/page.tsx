@@ -31,6 +31,8 @@ export default function FoodPage() {
   const [todayTotals, setTodayTotals] = useState({ calories: 0, protein: 0, carbs: 0, fat: 0 });
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [deleting, setDeleting] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   const targets = { calories: 2700, protein: 190, carbs: 275, fat: 75 };
 
@@ -64,8 +66,16 @@ export default function FoodPage() {
   }
 
   async function deleteLog(id: string) {
-    await supabase.from("food_logs").delete().eq("id", id);
-    loadToday();
+    setDeleting(id);
+    setError(null);
+    try {
+      await fetch(`/api/food-logs?id=${id}`, { method: "DELETE" });
+      loadToday();
+    } catch (err: unknown) {
+      setError((err as Error).message);
+    } finally {
+      setDeleting(null);
+    }
   }
 
   async function useSavedFood(food: FoodItem) {
@@ -94,6 +104,12 @@ export default function FoodPage() {
   return (
     <main className="max-w-lg mx-auto px-4 py-8 space-y-6">
       <h1 className="text-2xl font-bold">Food Log</h1>
+
+      {error && (
+        <div className="bg-red-500/10 border border-red-500/30 text-red-400 px-4 py-3 rounded-lg text-sm">
+          {error}
+        </div>
+      )}
 
       {/* Macro Summary */}
       <div className="bg-card p-5 rounded-lg border border-border">
@@ -179,8 +195,10 @@ export default function FoodPage() {
                             <span>P: {log.protein}g</span>
                             <span>C: {log.carbs}g</span>
                             <span>F: {log.fat}g</span>
-                            <button onClick={() => deleteLog(log.id)}
-                              className="text-red-400/70 hover:text-red-400 ml-1 transition">✕</button>
+                            <button onClick={() => deleteLog(log.id)} disabled={deleting === log.id}
+                              className="text-red-400/70 hover:text-red-400 ml-1 transition disabled:opacity-50">
+                              {deleting === log.id ? "⏳" : "✕"}
+                            </button>
                           </div>
                         </div>
                       ))}
