@@ -49,28 +49,27 @@ export default function WorkoutPage() {
     try {
       const { data: recentWorkouts, error: fetchErr } = await supabase
         .from("workouts")
-        .select(`*, workout_sets(*)`)
+        .select(`*, workout_sets(*, exercises(name))`)
         .order("date", { ascending: false })
         .limit(10);
 
       if (fetchErr) throw fetchErr;
 
       if (recentWorkouts) {
-        const enriched = recentWorkouts.map((w) => ({
-          ...w,
-          workout_sets: (w.workout_sets || []).map((ws) => ({
-            ...ws,
-            exercises: { name: ws.exercises?.name || "Exercise" },
-          })) as WorkoutSet[],
-        })) as Workout[];
-        setWorkouts(enriched);
+        setWorkouts(recentWorkouts as unknown as Workout[]);
 
         const { data: allSets } = await supabase
           .from("workout_sets")
-          .select("*, workouts(date), exercises(name)")
-          .order("workout_sets.set_number", { ascending: true });
+          .select("exercise_id, set_number, weight, reps, workouts(date), exercises(name)")
+          .limit(300);
 
-        if (allSets) setPreviousSets(allSets as unknown as PreviousSet[]);
+        if (allSets) {
+          const flattened = (allSets as unknown as (Omit<PreviousSet, "date"> & { workouts: { date: string } | null })[])
+            .map((s) => ({ ...s, date: s.workouts?.date ?? "" }))
+            .filter((s) => s.date)
+            .sort((a, b) => b.date.localeCompare(a.date));
+          setPreviousSets(flattened);
+        }
       }
     } catch (err: unknown) {
       setError((err as Error).message);
@@ -83,18 +82,12 @@ export default function WorkoutPage() {
     setSelectedDate(date);
     const { data } = await supabase
       .from("workouts")
-      .select(`*, workout_sets(*)`)
+      .select(`*, workout_sets(*, exercises(name))`)
       .eq("date", date)
       .order("name");
 
     if (data) {
-      setWorkouts(data.map((w) => ({
-        ...w,
-        workout_sets: (w.workout_sets || []).map((ws) => ({
-          ...ws,
-          exercises: { name: ws.exercises?.name || "Exercise" },
-        })) as WorkoutSet[],
-      })) as Workout[]);
+      setWorkouts(data as unknown as Workout[]);
     }
   }
 
@@ -197,7 +190,7 @@ export default function WorkoutPage() {
           {/* Log Workout Form */}
           <div className="bg-card p-5 rounded-lg border border-border">
             <h2 className="font-semibold mb-3">Log Workout</h2>
-            <WorkoutLogForm onAdded={() => loadWorkoutsForDate(selectedDate)} />
+            <WorkoutLogForm onSuccess={() => loadWorkoutsForDate(selectedDate)} />
           </div>
 
           {/* Previous Performance Reference */}

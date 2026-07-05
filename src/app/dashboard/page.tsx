@@ -11,6 +11,12 @@ interface BodyLog {
   waist: number | null;
 }
 
+interface Workout {
+  id: string;
+  date: string;
+  name: string;
+}
+
 interface DailyFoodTotals {
   calories: number;
   protein: number;
@@ -22,7 +28,7 @@ export default function DashboardPage() {
   const [bodylogs, setBodyLogs] = useState<BodyLog[]>([]);
   const [todayTotals, setTodayTotals] = useState<DailyFoodTotals | null>(null);
   const [weeklyTotals, setWeeklyTotals] = useState<DailyFoodTotals | null>(null);
-  const [workouts, setWorkouts] = useState<unknown[]>([]);
+  const [workouts, setWorkouts] = useState<Workout[]>([]);
   const [loading, setLoading] = useState(true);
   const [exporting, setExporting] = useState(false);
 
@@ -59,14 +65,11 @@ export default function DashboardPage() {
         // Last 7 days food totals
         const { data: weekFoods } = await supabase
           .from("food_logs")
-          .select("calories, protein, carbs, fat")
+          .select("date, calories, protein, carbs, fat")
           .gte("date", weekAgoStr)
           .lt("date", today);
         if (weekFoods && weekFoods.length > 0) {
-          const days = Math.max(1, (() => {
-            const first = new Set(weekFoods.map((f) => f.date)).size;
-            return first > 0 ? first : 1;
-          })());
+          const days = Math.max(1, new Set(weekFoods.map((f) => f.date)).size);
           setWeeklyTotals({
             calories: weekFoods.reduce((s, f) => s + (f.calories || 0), 0) / days,
             protein: weekFoods.reduce((s, f) => s + (f.protein || 0), 0) / days,
@@ -108,7 +111,7 @@ export default function DashboardPage() {
 
   // Next workout: find the next date after today that has a workout
   const today = new Date().toISOString().split("T")[0];
-  const nextWorkout = workouts.find((w: { date: string }) => w.date > today);
+  const nextWorkout = workouts.find((w) => w.date > today);
 
   const weightData = bodylogs.map((l) => ({
     date: l.date,

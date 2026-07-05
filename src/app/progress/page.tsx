@@ -13,15 +13,18 @@ interface BodyLog {
   waist: number | null;
 }
 
-interface WorkoutSet {
-  id: string;
-  workout_id: string;
+interface SetRow {
   exercise_id: string;
-  set_number: number;
   weight: number;
   reps: number;
-  exercises: { name: string };
-  workouts: { date: string };
+  exercises: { name: string } | null;
+}
+
+interface VolumeItem {
+  exercise: string;
+  volume: number;
+  sets: number;
+  bestWeight: number;
 }
 
 interface DailyMacros {
@@ -34,7 +37,7 @@ interface DailyMacros {
 
 export default function ProgressPage() {
   const [bodylogs, setBodyLogs] = useState<BodyLog[]>([]);
-  const [volumeData, setVolumeData] = useState<Record<string, { volume: number; sets: number; bestWeight: number }>>({});
+  const [volumeData, setVolumeData] = useState<VolumeItem[]>([]);
   const [dailyMacros, setDailyMacros] = useState<DailyMacros[]>([]);
   const [weeklyMacros, setWeeklyMacros] = useState<{ calories: number; protein: number; carbs: number; fat: number } | null>(null);
   const [loading, setLoading] = useState(true);
@@ -57,12 +60,12 @@ export default function ProgressPage() {
         const { data: sets } = await supabase
           .from("workout_sets")
           .select("exercise_id, weight, reps, exercises(name), workouts(date)")
-          .order("workouts.date", { ascending: false })
+          .order("workouts(date)", { ascending: false })
           .limit(150);
 
         if (sets) {
           const byEx: Record<string, { volumes: number[]; weights: number[]; count: number }> = {};
-          sets.forEach((s) => {
+          (sets as unknown as SetRow[]).forEach((s) => {
             const key = s.exercises?.name || s.exercise_id;
             if (!byEx[key]) byEx[key] = { volumes: [], weights: [], count: 0 };
             const vol = (s.weight || 0) * (s.reps || 0);
@@ -76,7 +79,7 @@ export default function ProgressPage() {
             sets: data.count,
             bestWeight: Math.max(...data.weights),
           }));
-          setVolumeData(chartData as unknown as Record<string, { volume: number; sets: number; bestWeight: number }>);
+          setVolumeData(chartData);
         }
 
         // Daily macros (last 14 days)
@@ -86,10 +89,20 @@ export default function ProgressPage() {
           .gte("date", new Date(Date.now() - 14 * 86400000).toISOString().split("T")[0])
           .order("date", { ascending: false });
         if (foods) {
-          setDailyMacros(foods as DailyMacros[]);
+          // Aggregate individual food entries into per-day totals
+          const byDate: Record<string, DailyMacros> = {};
+          for (const f of foods) {
+            if (!byDate[f.date]) byDate[f.date] = { date: f.date, calories: 0, protein: 0, carbs: 0, fat: 0 };
+            byDate[f.date].calories += f.calories || 0;
+            byDate[f.date].protein += f.protein || 0;
+            byDate[f.date].carbs += f.carbs || 0;
+            byDate[f.date].fat += f.fat || 0;
+          }
+          const perDay = Object.values(byDate).sort((a, b) => b.date.localeCompare(a.date));
+          setDailyMacros(perDay);
 
           // Weekly average
-          const days = new Set(foods.map((f) => f.date)).size;
+          const days = perDay.length;
           if (days > 0) {
             setWeeklyMacros({
               calories: foods.reduce((s, f) => s + (f.calories || 0), 0) / days,
@@ -226,10 +239,10 @@ export default function ProgressPage() {
       )}
 
       {/* Volume Chart */}
-      {Object.keys(volumeData).length > 0 && (
+      {volumeData.length > 0 && (
         <div className="bg-card p-6 rounded-lg border border-border">
           <h2 className="font-semibold mb-4">Recent Volume by Exercise</h2>
-          <VolumeChart data={Object.entries(volumeData).map(([exercise, data]) => ({ exercise, ...data }))} />
+          <VolumeChart data={volumeData} />
         </div>
       )}
     </main>

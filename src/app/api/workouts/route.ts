@@ -52,7 +52,7 @@ export async function POST(req: Request) {
     if (!exerciseId) {
       const { data: newEx } = await supabase
         .from("exercises")
-        .insert({ name, muscle_group: "general", equipment: "general" })
+        .insert({ name: exercise, muscle_group: "general", equipment: "general" })
         .select("id")
         .single();
       exerciseId = newEx?.id;

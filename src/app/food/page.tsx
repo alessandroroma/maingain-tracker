@@ -219,7 +219,7 @@ export default function FoodPage() {
           {/* Add Food Form */}
           <div className="bg-card p-5 rounded-lg border border-border">
             <h2 className="font-semibold mb-3">Add Food</h2>
-            <FoodLogForm onAdded={loadToday} />
+            <FoodLogForm onSuccess={loadToday} />
           </div>
         </>
       )}
