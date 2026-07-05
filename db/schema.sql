@@ -129,42 +129,21 @@ alter table program_days enable row level security;
 alter table program_exercises enable row level security;
 alter table weekly_checkins enable row level security;
 
--- Policy: users can only access their own data
-create policy "Users can view own data" on users for select using (auth.uid() = id);
-create policy "Users can update own data" on users for update using (auth.uid() = id);
-
-create policy "Users can view own body logs" on body_logs for select using (auth.uid() = user_id);
-create policy "Users can insert own body logs" on body_logs for insert with check (auth.uid() = user_id);
-create policy "Users can update own body logs" on body_logs for update using (auth.uid() = user_id);
-create policy "Users can delete own body logs" on body_logs for delete using (auth.uid() = user_id);
-
-create policy "Users can view own food items" on food_items for select using (auth.uid() = user_id);
-create policy "Users can insert own food items" on food_items for insert with check (auth.uid() = user_id);
-create policy "Users can update own food items" on food_items for update using (auth.uid() = user_id);
-create policy "Users can delete own food items" on food_items for delete using (auth.uid() = user_id);
-
-create policy "Users can view own food logs" on food_logs for select using (auth.uid() = user_id);
-create policy "Users can insert own food logs" on food_logs for insert with check (auth.uid() = user_id);
-create policy "Users can update own food logs" on food_logs for update using (auth.uid() = user_id);
-create policy "Users can delete own food logs" on food_logs for delete using (auth.uid() = user_id);
-
-create policy "Users can view own exercises" on exercises for select using (auth.uid() = user_id);
-create policy "Users can insert own exercises" on exercises for insert with check (auth.uid() = user_id);
-
-create policy "Users can view own workouts" on workouts for select using (auth.uid() = user_id);
-create policy "Users can insert own workouts" on workouts for insert with check (auth.uid() = user_id);
-
-create policy "Users can view own workout sets" on workout_sets for select using (auth.uid() = user_id);
-create policy "Users can insert own workout sets" on workout_sets for insert with check (auth.uid() = user_id);
-
-create policy "Users can view own program days" on program_days for select using (auth.uid() = user_id);
-create policy "Users can insert own program days" on program_days for insert with check (auth.uid() = user_id);
-
-create policy "Users can view own program exercises" on program_exercises for select using (auth.uid() = user_id);
-create policy "Users can insert own program exercises" on program_exercises for insert with check (auth.uid() = user_id);
-
-create policy "Users can view own check-ins" on weekly_checkins for select using (auth.uid() = user_id);
-create policy "Users can insert own check-ins" on weekly_checkins for insert with check (auth.uid() = user_id);
+-- Policies: this is a single-user personal app with no auth.
+-- The app connects with the anon key and never sets user_id, so policies
+-- allow full access to the anon role. If you add Supabase Auth later,
+-- replace these with `auth.uid() = user_id` policies and start setting
+-- user_id on every insert.
+create policy "Allow all access" on users for all using (true) with check (true);
+create policy "Allow all access" on body_logs for all using (true) with check (true);
+create policy "Allow all access" on food_items for all using (true) with check (true);
+create policy "Allow all access" on food_logs for all using (true) with check (true);
+create policy "Allow all access" on exercises for all using (true) with check (true);
+create policy "Allow all access" on workouts for all using (true) with check (true);
+create policy "Allow all access" on workout_sets for all using (true) with check (true);
+create policy "Allow all access" on program_days for all using (true) with check (true);
+create policy "Allow all access" on program_exercises for all using (true) with check (true);
+create policy "Allow all access" on weekly_checkins for all using (true) with check (true);
 
 -- Seed: default exercises
 insert into exercises (name, muscle_group, equipment, default_rep_min, default_rep_max) values
