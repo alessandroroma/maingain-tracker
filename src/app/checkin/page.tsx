@@ -32,6 +32,7 @@ export default function CheckinPage() {
   const [notes, setNotes] = useState("");
   const [loading, setLoading] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
   const [prevWeekWeight, setPrevWeekWeight] = useState<number | null>(null);
 
   async function autoCalculate() {
@@ -41,6 +42,9 @@ export default function CheckinPage() {
       weekEnd.setDate(weekEnd.getDate() + 7);
       const weekEndStr = weekEnd.toISOString().split("T")[0];
 
+      let currentAvg: number | null = null;
+      let prevAvg: number | null = null;
+
       // Current week body logs
       const { data: weightData } = await supabase
         .from("body_logs")
@@ -49,9 +53,8 @@ export default function CheckinPage() {
         .lt("date", weekEndStr);
 
       if (weightData && weightData.length > 0) {
-        const avg = weightData.reduce((s, w) => s + w.bodyweight, 0) / weightData.length;
-        setAvgWeight(avg.toFixed(1));
-        setPrevWeekWeight(null); // Will calculate below
+        currentAvg = weightData.reduce((s, w) => s + w.bodyweight, 0) / weightData.length;
+        setAvgWeight(currentAvg.toFixed(1));
       }
 
       // Previous week for comparison
@@ -66,27 +69,28 @@ export default function CheckinPage() {
         .lt("date", prevWeekEnd.toISOString().split("T")[0]);
 
       if (prevWeights && prevWeights.length > 0) {
-        const prevAvg = prevWeights.reduce((s, w) => s + w.bodyweight, 0) / prevWeights.length;
+        prevAvg = prevWeights.reduce((s, w) => s + w.bodyweight, 0) / prevWeights.length;
         setPrevAvgWeight(prevAvg.toFixed(1));
-        setPrevWeekWeight(prevAvg);
       }
+      setPrevWeekWeight(prevAvg);
 
-      // Current week food logs
+      // Current week food logs, averaged per logged day
       const { data: foodData } = await supabase
         .from("food_logs")
-        .select("calories, protein")
+        .select("date, calories, protein")
         .gte("date", weekStart)
         .lt("date", weekEndStr);
 
       if (foodData && foodData.length > 0) {
-        const calAvg = foodData.reduce((s, f) => s + f.calories, 0) / foodData.length;
-        const protAvg = foodData.reduce((s, f) => s + f.protein, 0) / foodData.length;
+        const days = Math.max(1, new Set(foodData.map((f) => f.date)).size);
+        const calAvg = foodData.reduce((s, f) => s + f.calories, 0) / days;
+        const protAvg = foodData.reduce((s, f) => s + f.protein, 0) / days;
         setAvgCalories(calAvg.toFixed(0));
         setAvgProtein(protAvg.toFixed(0));
       }
 
       // Auto-generate recommendation based on data
-      generateRecommendation(avgWeight, prevWeekWeight);
+      generateRecommendation(currentAvg, prevAvg, strengthTrend);
     } catch {
       setRecommendation("Could not auto-calculate. Enter manually.");
     } finally {
@@ -94,26 +98,25 @@ export default function CheckinPage() {
     }
   }
 
-  function generateRecommendation(avgWeight: string, prevWeekWeight: number | null) {
-    if (!avgWeight || !prevWeekWeight) return;
+  function generateRecommendation(current: number | null, prev: number | null, trend: string) {
+    if (current == null || prev == null) return;
 
-    const current = parseFloat(avgWeight);
-    const change = current - prevWeekWeight;
+    const change = current - prev;
 
     // Weight change in last 7 days (approximate weekly change)
     const weeklyChange = change;
 
-    if (weeklyChange >= -0.75 && weeklyChange <= 0.75 && strengthTrend === "up") {
+    if (weeklyChange >= -0.75 && weeklyChange <= 0.75 && trend === "up") {
       setRecommendation("✅ Ideal recomp — keep calories the same. Scale flat/slightly down with waist down and strength up is exactly what you want.");
-    } else if (weeklyChange < -0.75 && strengthTrend === "down") {
+    } else if (weeklyChange < -0.75 && trend === "down") {
       setRecommendation("⚠️ Dropping too fast with strength loss — increase calories by 100-200 kcal/day. You're sacrificing muscle.");
     } else if (weeklyChange > 0.75) {
       setRecommendation("⚠️ Gaining too fast — reduce calories by 100-200 kcal/day. Aim for 0.25-0.75 lb/week loss for recomp.");
-    } else if (Math.abs(weeklyChange) <= 0.25 && strengthTrend === "stable") {
+    } else if (Math.abs(weeklyChange) <= 0.25 && trend === "stable") {
       setRecommendation("✅ Good plateau — keep calories the same. If waist is also flat for 2+ weeks, try reducing by 100-150 kcal.");
-    } else if (weeklyChange < 0 && strengthTrend === "stable") {
+    } else if (weeklyChange < 0 && trend === "stable") {
       setRecommendation("✅ Solid progress — keep calories the same. Weight down and strength stable is the goal.");
-    } else if (weeklyChange > 0 && strengthTrend === "stable") {
+    } else if (weeklyChange > 0 && trend === "stable") {
       setRecommendation("⚠️ Scale up but strength stable — slightly reduce calories by 100 kcal. You might be gaining faster than fat.");
     } else {
       setRecommendation("✅ Keep calories the same — review trends and adjust as needed.");
@@ -121,34 +124,35 @@ export default function CheckinPage() {
   }
 
   // Update recommendation when strength trend changes
-  async function updateRecommendation() {
+  function updateRecommendation(trend: string) {
     if (avgWeight && prevWeekWeight != null) {
-      generateRecommendation(avgWeight, prevWeekWeight);
+      generateRecommendation(parseFloat(avgWeight), prevWeekWeight, trend);
     }
   }
 
   async function saveCheckin(e: React.FormEvent) {
     e.preventDefault();
-    try {
-      await supabase.from("weekly_checkins").insert({
-        week_start: weekStart,
-        avg_weight: avgWeight ? parseFloat(avgWeight) : null,
-        prev_avg_weight: prevAvgWeight ? parseFloat(prevAvgWeight) : null,
-        weight_change: avgWeight && prevAvgWeight
-          ? parseFloat(avgWeight) - parseFloat(prevAvgWeight)
-          : null,
-        waist_change: waistChange ? parseFloat(waistChange) : null,
-        avg_calories: avgCalories ? parseFloat(avgCalories) : null,
-        avg_protein: avgProtein ? parseFloat(avgProtein) : null,
-        strength_trend: strengthTrend,
-        recommendation,
-        notes,
-      });
-      setSaved(true);
-      setTimeout(() => setSaved(false), 3000);
-    } catch {
-      console.error("Failed to save check-in");
+    setSaveError(null);
+    const { error } = await supabase.from("weekly_checkins").insert({
+      week_start: weekStart,
+      avg_weight: avgWeight ? parseFloat(avgWeight) : null,
+      prev_avg_weight: prevAvgWeight ? parseFloat(prevAvgWeight) : null,
+      weight_change: avgWeight && prevAvgWeight
+        ? parseFloat(avgWeight) - parseFloat(prevAvgWeight)
+        : null,
+      waist_change: waistChange ? parseFloat(waistChange) : null,
+      avg_calories: avgCalories ? parseFloat(avgCalories) : null,
+      avg_protein: avgProtein ? parseFloat(avgProtein) : null,
+      strength_trend: strengthTrend,
+      recommendation,
+      notes,
+    });
+    if (error) {
+      setSaveError(`Failed to save check-in: ${error.message}`);
+      return;
     }
+    setSaved(true);
+    setTimeout(() => setSaved(false), 3000);
   }
 
   return (
@@ -188,7 +192,7 @@ export default function CheckinPage() {
           </div>
           <div>
             <label className="block text-sm text-muted mb-1">Strength Trend</label>
-            <select value={strengthTrend} onChange={(e) => { setStrengthTrend(e.target.value); updateRecommendation(); }}
+            <select value={strengthTrend} onChange={(e) => { setStrengthTrend(e.target.value); updateRecommendation(e.target.value); }}
               className="w-full bg-card border border-border rounded px-3 py-2 text-foreground">
               <option value="up">Up ⬆️</option>
               <option value="stable">Stable ➡️</option>
@@ -232,6 +236,11 @@ export default function CheckinPage() {
           <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={3}
             className="w-full bg-card border border-border rounded px-3 py-2 text-foreground" />
         </div>
+        {saveError && (
+          <div className="bg-red-500/10 border border-red-500/30 text-red-400 px-4 py-3 rounded-lg text-sm">
+            {saveError}
+          </div>
+        )}
         <button type="submit"
           className="w-full bg-primary hover:bg-primary-hover text-white py-2 rounded transition">
           {saved ? "✅ Saved!" : "Save Check-In"}

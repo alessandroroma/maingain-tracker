@@ -33,7 +33,7 @@ export function MacroDonut({ calories, protein, carbs, fat, targets }: MacroDonu
       <ResponsiveContainer width="100%" height={200}>
         <PieChart>
           <Pie data={data} cx="50%" cy="50%" innerRadius={50} outerRadius={80} paddingAngle={2} dataKey="value">
-            {data.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
+            {data.map((entry, i) => <Cell key={i} fill={entry.color} />)}
           </Pie>
           <Tooltip contentStyle={{ background: "#1e293b", border: "1px solid #334155", borderRadius: 6, color: "#e2e8f0" }} />
         </PieChart>

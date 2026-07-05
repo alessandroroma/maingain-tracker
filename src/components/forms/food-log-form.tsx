@@ -13,12 +13,14 @@ export function FoodLogForm({ onSuccess }: { onSuccess?: () => void }) {
   const [carbs, setCarbs] = useState("");
   const [fat, setFat] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setSubmitting(true);
+    setError(null);
     try {
-      await fetch("/api/food-logs", {
+      const res = await fetch("/api/food-logs", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -29,14 +31,18 @@ export function FoodLogForm({ onSuccess }: { onSuccess?: () => void }) {
           fat: parseInt(fat) || 0,
         }),
       });
+      if (!res.ok) {
+        const body = await res.json().catch(() => null);
+        throw new Error(body?.error || `Save failed (${res.status})`);
+      }
       setFoodName("");
       setCalories("");
       setProtein("");
       setCarbs("");
       setFat("");
       onSuccess?.();
-    } catch {
-      console.error("Failed to log food");
+    } catch (err: unknown) {
+      setError((err as Error).message);
     } finally {
       setSubmitting(false);
     }
@@ -85,6 +91,11 @@ export function FoodLogForm({ onSuccess }: { onSuccess?: () => void }) {
             className="w-full bg-card border border-border rounded px-2 py-2 text-foreground" />
         </div>
       </div>
+      {error && (
+        <div className="bg-red-500/10 border border-red-500/30 text-red-400 px-4 py-3 rounded-lg text-sm">
+          {error}
+        </div>
+      )}
       <button type="submit" disabled={submitting}
         className="w-full bg-primary hover:bg-primary-hover disabled:opacity-50 text-white py-2 rounded transition">
         {submitting ? "Saving..." : "Log Food"}

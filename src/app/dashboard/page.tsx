@@ -116,7 +116,6 @@ export default function DashboardPage() {
   const weightData = bodylogs.map((l) => ({
     date: l.date,
     weight: l.bodyweight,
-    avg7: 0,
   }));
 
   async function handleExport() {

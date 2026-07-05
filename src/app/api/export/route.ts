@@ -11,7 +11,7 @@ export async function GET() {
     const { data: foodLogs } = await supabase.from("food_logs").select("*").order("date");
     const { data: workouts } = await supabase
       .from("workouts")
-      .select("*, workout_sets(*), exercises(name)");
+      .select("*, workout_sets(*, exercises(name))");
     const { data: checkins } = await supabase.from("weekly_checkins").select("*").order("week_start");
     const { data: foodItems } = await supabase.from("food_items").select("*").order("name");
 
@@ -26,8 +26,6 @@ export async function GET() {
     };
 
     const json = JSON.stringify(exportData, null, 2);
-    const blob = new Blob([json], { type: "application/json" });
-    const url = URL.createObjectURL(blob);
 
     return new NextResponse(json, {
       headers: {

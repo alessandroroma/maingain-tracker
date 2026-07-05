@@ -5,7 +5,6 @@ import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContai
 interface DataPoint {
   date: string;
   weight: number;
-  avg7: number;
 }
 
 interface WeightChartProps {
@@ -21,9 +20,17 @@ export function WeightChart({ data }: WeightChartProps) {
     );
   }
 
+  // Sort chronologically and compute a rolling 7-day average
+  const sorted = [...data].sort((a, b) => a.date.localeCompare(b.date));
+  const chartData = sorted.map((point, i) => {
+    const window = sorted.slice(Math.max(0, i - 6), i + 1);
+    const avg7 = window.reduce((s, p) => s + p.weight, 0) / window.length;
+    return { ...point, avg7: Math.round(avg7 * 10) / 10 };
+  });
+
   return (
     <ResponsiveContainer width="100%" height={250}>
-      <LineChart data={data}>
+      <LineChart data={chartData}>
         <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
         <XAxis dataKey="date" tick={{ fill: "#94a3b8", fontSize: 12 }} />
         <YAxis tick={{ fill: "#94a3b8", fontSize: 12 }} domain={["auto", "auto"]} />

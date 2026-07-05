@@ -109,12 +109,14 @@ create table weekly_checkins (
   user_id uuid references users(id) on delete cascade,
   week_start date not null,
   avg_weight numeric,
+  prev_avg_weight numeric,
   weight_change numeric,
   waist_change numeric,
   avg_calories numeric,
   avg_protein numeric,
   strength_trend text check (strength_trend in ('up','stable','down')),
-  recommendation text
+  recommendation text,
+  notes text
 );
 
 -- Row-level security policies

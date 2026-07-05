@@ -20,7 +20,7 @@ export function WorkoutLogForm({ onSuccess }: { onSuccess?: () => void }) {
   const [exercise, setExercise] = useState("");
   const [sets, setSets] = useState<SetData[]>([{ weight: "", reps: "", rpe: "", rir: "" }]);
   const [submitting, setSubmitting] = useState(false);
-  const [savedExercises, setSavedExercises] = useState<string[]>(DEFAULT_EXERCISES);
+  const [error, setError] = useState<string | null>(null);
 
   function addSet() {
     setSets((prev) => [...prev, { weight: "", reps: "", rpe: "", rir: "" }]);
@@ -34,27 +34,24 @@ export function WorkoutLogForm({ onSuccess }: { onSuccess?: () => void }) {
     setSets((prev) => prev.map((s, i) => i === index ? { ...s, [field]: value } : s));
   }
 
-  async function handleAddExercise(e: React.FormEvent) {
-    e.preventDefault();
-    if (exercise && !savedExercises.includes(exercise)) {
-      setSavedExercises((prev) => [...prev, exercise]);
-      setExercise("");
-    }
-  }
-
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setSubmitting(true);
+    setError(null);
     try {
-      await fetch("/api/workouts", {
+      const res = await fetch("/api/workouts", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ date, name: workoutName, exercise, sets }),
       });
+      if (!res.ok) {
+        const body = await res.json().catch(() => null);
+        throw new Error(body?.error || `Save failed (${res.status})`);
+      }
       setSets([{ weight: "", reps: "", rpe: "", rir: "" }]);
       onSuccess?.();
-    } catch {
-      console.error("Failed to log workout");
+    } catch (err: unknown) {
+      setError((err as Error).message);
     } finally {
       setSubmitting(false);
     }
@@ -80,30 +77,32 @@ export function WorkoutLogForm({ onSuccess }: { onSuccess?: () => void }) {
       <div>
         <label className="block text-sm text-muted mb-1">Exercise</label>
         <div className="flex gap-2">
-          <select value={exercise} onChange={(e) => setExercise(e.target.value)}
+          <select value={exercise} onChange={(e) => setExercise(e.target.value)} required
             className="flex-1 bg-card border border-border rounded px-3 py-2 text-foreground">
             <option value="">Select exercise...</option>
-            {savedExercises.map((ex) => <option key={ex} value={ex}>{ex}</option>)}
+            {DEFAULT_EXERCISES.map((ex) => <option key={ex} value={ex}>{ex}</option>)}
           </select>
         </div>
       </div>
 
       <div className="space-y-2">
-        <div className="grid grid-cols-6 gap-2 text-xs text-muted">
-          <span>#</span><span>Weight</span><span>Reps</span><span>RPE</span><span>RIR</span><span></span>
-        </div>
         {sets.map((s, i) => (
-          <div key={i} className="grid grid-cols-6 gap-2 items-end">
-            <WorkoutSetRow setNumber={i + 1} weight={s.weight} reps={s.reps} rpe={s.rpe} rir={s.rir}
-              onWeightChange={(v) => updateSet(i, "weight", v)}
-              onRepsChange={(v) => updateSet(i, "reps", v)}
-              onRpeChange={(v) => updateSet(i, "rpe", v)}
-              onRirChange={(v) => updateSet(i, "rir", v)} />
-          </div>
+          <WorkoutSetRow key={i} setNumber={i + 1} weight={s.weight} reps={s.reps} rpe={s.rpe} rir={s.rir}
+            onWeightChange={(v) => updateSet(i, "weight", v)}
+            onRepsChange={(v) => updateSet(i, "reps", v)}
+            onRpeChange={(v) => updateSet(i, "rpe", v)}
+            onRirChange={(v) => updateSet(i, "rir", v)}
+            onRemove={sets.length > 1 ? () => removeSet(i) : undefined} />
         ))}
         <button type="button" onClick={addSet}
           className="text-sm text-primary hover:underline">+ Add set</button>
       </div>
+
+      {error && (
+        <div className="bg-red-500/10 border border-red-500/30 text-red-400 px-4 py-3 rounded-lg text-sm">
+          {error}
+        </div>
+      )}
 
       <button type="submit" disabled={submitting}
         className="w-full bg-primary hover:bg-primary-hover disabled:opacity-50 text-white py-2 rounded transition">

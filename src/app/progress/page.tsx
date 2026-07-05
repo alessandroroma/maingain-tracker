@@ -124,7 +124,6 @@ export default function ProgressPage() {
   const weightChartData = bodylogs.map((l) => ({
     date: l.date,
     weight: l.bodyweight,
-    avg7: 0,
   }));
 
   const latestWeight = bodylogs.length > 0 ? bodylogs[bodylogs.length - 1].bodyweight : null;
