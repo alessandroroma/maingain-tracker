@@ -24,6 +24,16 @@ interface DailyFoodTotals {
   fat: number;
 }
 
+interface RecoveryLog {
+  date: string;
+  source: string;
+  readiness: number | null;
+  sleep_score: number | null;
+  sleep_hours: number | null;
+  hrv: number | null;
+  resting_hr: number | null;
+}
+
 export default function DashboardPage() {
   const [bodylogs, setBodyLogs] = useState<BodyLog[]>([]);
   const [todayTotals, setTodayTotals] = useState<DailyFoodTotals | null>(null);
@@ -31,6 +41,34 @@ export default function DashboardPage() {
   const [workouts, setWorkouts] = useState<Workout[]>([]);
   const [loading, setLoading] = useState(true);
   const [exporting, setExporting] = useState(false);
+  const [recovery, setRecovery] = useState<RecoveryLog | null>(null);
+  const [syncing, setSyncing] = useState(false);
+  const [syncMessage, setSyncMessage] = useState<string | null>(null);
+
+  async function loadRecovery() {
+    const { data } = await supabase
+      .from("recovery_logs")
+      .select("*")
+      .order("date", { ascending: false })
+      .limit(1);
+    if (data && data.length > 0) setRecovery(data[0]);
+  }
+
+  async function syncRecovery() {
+    setSyncing(true);
+    setSyncMessage(null);
+    try {
+      const res = await fetch("/api/sync/oura?days=7");
+      const body = await res.json();
+      if (!res.ok) throw new Error(body?.error || `Sync failed (${res.status})`);
+      setSyncMessage(`Synced ${body.synced} day${body.synced === 1 ? "" : "s"}`);
+      loadRecovery();
+    } catch (err: unknown) {
+      setSyncMessage((err as Error).message);
+    } finally {
+      setSyncing(false);
+    }
+  }
 
   useEffect(() => {
     async function fetchData() {
@@ -85,6 +123,8 @@ export default function DashboardPage() {
           .order("date", { ascending: false })
           .limit(10);
         if (recentWorkouts) setWorkouts(recentWorkouts);
+
+        loadRecovery();
 
       } catch (err) {
         console.error("Dashboard fetch error:", err);
@@ -173,6 +213,53 @@ export default function DashboardPage() {
               <h2 className="text-sm font-medium text-muted mb-1">Today&apos;s Protein</h2>
               <p className="text-2xl font-bold">{todayTotals?.protein ?? "—"} g</p>
             </div>
+          </div>
+
+          {/* Recovery (Oura / Whoop) */}
+          <div className="bg-card p-6 rounded-lg border border-border">
+            <div className="flex justify-between items-center mb-3">
+              <h2 className="font-semibold">Recovery</h2>
+              <div className="flex items-center gap-3">
+                {syncMessage && <span className="text-xs text-muted">{syncMessage}</span>}
+                <button onClick={syncRecovery} disabled={syncing}
+                  className="text-xs text-muted hover:text-foreground transition disabled:opacity-50">
+                  {syncing ? "⏳ Syncing..." : "↻ Sync Oura"}
+                </button>
+              </div>
+            </div>
+            {recovery ? (
+              <div className="grid grid-cols-2 md:grid-cols-5 gap-3 text-center">
+                <div>
+                  <p className={`text-2xl font-bold ${recovery.readiness != null ? (recovery.readiness >= 80 ? "text-green-400" : recovery.readiness >= 65 ? "text-yellow-400" : "text-red-400") : ""}`}>
+                    {recovery.readiness ?? "—"}
+                  </p>
+                  <p className="text-xs text-muted">Readiness</p>
+                </div>
+                <div>
+                  <p className="text-2xl font-bold">{recovery.sleep_score ?? "—"}</p>
+                  <p className="text-xs text-muted">Sleep score</p>
+                </div>
+                <div>
+                  <p className="text-2xl font-bold">{recovery.sleep_hours != null ? `${recovery.sleep_hours}h` : "—"}</p>
+                  <p className="text-xs text-muted">Sleep</p>
+                </div>
+                <div>
+                  <p className="text-2xl font-bold">{recovery.hrv != null ? recovery.hrv : "—"}</p>
+                  <p className="text-xs text-muted">HRV (ms)</p>
+                </div>
+                <div>
+                  <p className="text-2xl font-bold">{recovery.resting_hr ?? "—"}</p>
+                  <p className="text-xs text-muted">Resting HR</p>
+                </div>
+              </div>
+            ) : (
+              <p className="text-muted text-sm">No recovery data yet — tap Sync Oura (needs OURA_PAT configured)</p>
+            )}
+            {recovery && (
+              <p className="text-xs text-muted mt-2">
+                {new Date(recovery.date + "T00:00:00").toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })} · via {recovery.source}
+              </p>
+            )}
           </div>
 
           <div className="bg-card p-6 rounded-lg border border-border">

@@ -33,6 +33,7 @@ export default function CheckinPage() {
   const [loading, setLoading] = useState(false);
   const [saved, setSaved] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [avgReadiness, setAvgReadiness] = useState<number | null>(null);
   const [prevWeekWeight, setPrevWeekWeight] = useState<number | null>(null);
 
   async function autoCalculate() {
@@ -87,6 +88,21 @@ export default function CheckinPage() {
         const protAvg = foodData.reduce((s, f) => s + f.protein, 0) / days;
         setAvgCalories(calAvg.toFixed(0));
         setAvgProtein(protAvg.toFixed(0));
+      }
+
+      // Recovery data for the week (Oura/Whoop), averaged across sources
+      const { data: recoveryData } = await supabase
+        .from("recovery_logs")
+        .select("readiness")
+        .gte("date", weekStart)
+        .lt("date", weekEndStr)
+        .not("readiness", "is", null);
+
+      if (recoveryData && recoveryData.length > 0) {
+        const avg = recoveryData.reduce((s, r) => s + (r.readiness || 0), 0) / recoveryData.length;
+        setAvgReadiness(Math.round(avg));
+      } else {
+        setAvgReadiness(null);
       }
 
       // Auto-generate recommendation based on data
@@ -212,6 +228,19 @@ export default function CheckinPage() {
               className="w-full bg-card border border-border rounded px-3 py-2 text-foreground" />
           </div>
         </div>
+
+        {/* Recovery context from Oura/Whoop */}
+        {avgReadiness != null && (
+          <div className={`rounded-lg p-4 border ${avgReadiness >= 80 ? "bg-green-900/20 border-green-700/30" : avgReadiness >= 65 ? "bg-card border-border" : "bg-yellow-900/20 border-yellow-700/30"}`}>
+            <p className="text-sm">
+              <span className="font-medium">Avg readiness this week: {avgReadiness}</span>
+              {avgReadiness < 65 && (
+                <span className="text-yellow-300"> — recovery is running low. Be cautious about cutting calories further; prioritize sleep before making the deficit more aggressive.</span>
+              )}
+              {avgReadiness >= 80 && <span className="text-green-300"> — recovering well.</span>}
+            </p>
+          </div>
+        )}
 
         {/* Auto-generated recommendation display */}
         {recommendation && recommendation.startsWith("✅") && (

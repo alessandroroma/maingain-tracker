@@ -103,6 +103,20 @@ create table program_exercises (
   notes text
 );
 
+-- Recovery logs (synced from Oura / Whoop; one row per day per source)
+create table recovery_logs (
+  id uuid primary key default uuid_generate_v4(),
+  user_id uuid references users(id) on delete cascade,
+  date date not null,
+  source text not null check (source in ('oura','whoop')),
+  readiness int,        -- Oura readiness / Whoop recovery score (0-100)
+  sleep_score int,      -- 0-100
+  sleep_hours numeric,
+  hrv numeric,          -- ms
+  resting_hr numeric,   -- bpm
+  unique(date, source)
+);
+
 -- Weekly check-ins
 create table weekly_checkins (
   id uuid primary key default uuid_generate_v4(),
@@ -130,6 +144,7 @@ alter table workout_sets enable row level security;
 alter table program_days enable row level security;
 alter table program_exercises enable row level security;
 alter table weekly_checkins enable row level security;
+alter table recovery_logs enable row level security;
 
 -- Policies: this is a single-user personal app with no auth.
 -- The app connects with the anon key and never sets user_id, so policies
@@ -146,6 +161,7 @@ create policy "Allow all access" on workout_sets for all using (true) with check
 create policy "Allow all access" on program_days for all using (true) with check (true);
 create policy "Allow all access" on program_exercises for all using (true) with check (true);
 create policy "Allow all access" on weekly_checkins for all using (true) with check (true);
+create policy "Allow all access" on recovery_logs for all using (true) with check (true);
 
 -- Seed: default exercises
 insert into exercises (name, muscle_group, equipment, default_rep_min, default_rep_max) values
