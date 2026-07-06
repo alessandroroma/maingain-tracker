@@ -57,17 +57,21 @@ export default function DashboardPage() {
   async function syncRecovery() {
     setSyncing(true);
     setSyncMessage(null);
-    try {
-      const res = await fetch("/api/sync/oura?days=7");
-      const body = await res.json();
-      if (!res.ok) throw new Error(body?.error || `Sync failed (${res.status})`);
-      setSyncMessage(`Synced ${body.synced} day${body.synced === 1 ? "" : "s"}`);
-      loadRecovery();
-    } catch (err: unknown) {
-      setSyncMessage((err as Error).message);
-    } finally {
-      setSyncing(false);
-    }
+    const results = await Promise.allSettled(
+      ["oura", "whoop"].map(async (provider) => {
+        const res = await fetch(`/api/sync/${provider}?days=7`);
+        const body = await res.json();
+        if (!res.ok) throw new Error(body?.error || `failed (${res.status})`);
+        return `${provider}: ${body.synced}d`;
+      })
+    );
+    setSyncMessage(
+      results
+        .map((r, i) => (r.status === "fulfilled" ? r.value : `${["oura", "whoop"][i]}: ${r.reason.message}`))
+        .join(" · ")
+    );
+    loadRecovery();
+    setSyncing(false);
   }
 
   useEffect(() => {
@@ -222,8 +226,8 @@ export default function DashboardPage() {
               <div className="flex items-center gap-3">
                 {syncMessage && <span className="text-xs text-muted">{syncMessage}</span>}
                 <button onClick={syncRecovery} disabled={syncing}
-                  className="text-xs text-muted hover:text-foreground transition disabled:opacity-50">
-                  {syncing ? "⏳ Syncing..." : "↻ Sync Oura"}
+                  className="text-xs text-muted hover:text-foreground transition disabled:opacity-50 shrink-0">
+                  {syncing ? "⏳ Syncing..." : "↻ Sync"}
                 </button>
               </div>
             </div>
@@ -253,7 +257,7 @@ export default function DashboardPage() {
                 </div>
               </div>
             ) : (
-              <p className="text-muted text-sm">No recovery data yet — tap Sync Oura (needs OURA_PAT configured)</p>
+              <p className="text-muted text-sm">No recovery data yet — tap Sync (Oura needs OURA_PAT; WHOOP needs one-time authorization at /api/whoop/auth)</p>
             )}
             {recovery && (
               <p className="text-xs text-muted mt-2">

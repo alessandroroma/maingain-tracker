@@ -3,6 +3,10 @@
     {
       "path": "/api/sync/oura",
       "schedule": "0 13 * * *"
+    },
+    {
+      "path": "/api/sync/whoop",
+      "schedule": "30 13 * * *"
     }
   ]
 }

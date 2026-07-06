@@ -117,6 +117,15 @@ create table recovery_logs (
   unique(date, source)
 );
 
+-- OAuth tokens for connected integrations (single-user; e.g. WHOOP)
+create table integration_tokens (
+  provider text primary key,
+  access_token text not null,
+  refresh_token text not null,
+  expires_at timestamptz not null,
+  updated_at timestamptz default now()
+);
+
 -- Weekly check-ins
 create table weekly_checkins (
   id uuid primary key default uuid_generate_v4(),
