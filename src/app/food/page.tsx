@@ -11,6 +11,7 @@ interface SearchResult {
   carbs: number;
   fat: number;
   basis: string;
+  source: "USDA" | "OFF";
 }
 
 interface FoodLog {
@@ -238,7 +239,12 @@ export default function FoodPage() {
             {searchResults.map((r, i) => (
               <div key={i} className="flex items-center justify-between gap-2 py-2 border-b border-border/40 last:border-0">
                 <button onClick={() => useSearchResult(r)} className="flex-1 min-w-0 text-left hover:bg-background/60 rounded px-1 py-0.5 transition">
-                  <p className="text-sm font-medium truncate">{r.name}</p>
+                  <p className="text-sm font-medium truncate">
+                    {r.source === "USDA" && (
+                      <span className="text-[10px] font-semibold text-green-400/80 border border-green-400/30 rounded px-1 mr-1.5 align-middle">USDA</span>
+                    )}
+                    {r.name}
+                  </p>
                   <p className="text-xs text-muted">
                     {r.calories} kcal · P {r.protein}g · C {r.carbs}g · F {r.fat}g <span className="opacity-70">({r.basis})</span>
                   </p>

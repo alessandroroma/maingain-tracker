@@ -63,6 +63,12 @@ NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-key-here
 ```
 
+Optional: the food page's database search uses Open Food Facts (no key needed) plus USDA FoodData Central. USDA works out of the box on the shared `DEMO_KEY`, but a personal key (free, instant, from [api.data.gov/signup](https://api.data.gov/signup/)) avoids shared rate limits:
+
+```env
+USDA_API_KEY=your-usda-key
+```
+
 ### 4. (Optional) Set Up Auth
 
 The current schema doesn't enforce auth — all data is stored without user_id fields for simplicity. If you add auth later:
