@@ -2,7 +2,16 @@
 
 import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabase";
-import { FoodLogForm } from "@/components/forms/food-log-form";
+import { FoodLogForm, FoodPrefill } from "@/components/forms/food-log-form";
+
+interface SearchResult {
+  name: string;
+  calories: number;
+  protein: number;
+  carbs: number;
+  fat: number;
+  basis: string;
+}
 
 interface FoodLog {
   id: string;
@@ -33,6 +42,13 @@ export default function FoodPage() {
   const [refreshing, setRefreshing] = useState(false);
   const [deleting, setDeleting] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
+  const [searching, setSearching] = useState(false);
+  const [searchError, setSearchError] = useState<string | null>(null);
+  const [searched, setSearched] = useState(false);
+  const [prefill, setPrefill] = useState<FoodPrefill | null>(null);
+  const [savingFood, setSavingFood] = useState<string | null>(null);
 
   const targets = { calories: 2700, protein: 190, carbs: 275, fat: 75 };
 
@@ -90,6 +106,49 @@ export default function FoodPage() {
       fat: food.fat,
     });
     loadToday();
+  }
+
+  async function searchFoods(e: React.FormEvent) {
+    e.preventDefault();
+    if (!searchQuery.trim()) return;
+    setSearching(true);
+    setSearchError(null);
+    try {
+      const res = await fetch(`/api/food-search?q=${encodeURIComponent(searchQuery)}`);
+      const body = await res.json();
+      if (!res.ok) throw new Error(body?.error || `Search failed (${res.status})`);
+      setSearchResults(body);
+      setSearched(true);
+    } catch (err: unknown) {
+      setSearchError((err as Error).message);
+    } finally {
+      setSearching(false);
+    }
+  }
+
+  function useSearchResult(r: SearchResult) {
+    setPrefill({ name: r.name, calories: r.calories, protein: r.protein, carbs: r.carbs, fat: r.fat });
+    document.getElementById("add-food-form")?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+
+  async function saveSearchResult(r: SearchResult) {
+    setSavingFood(r.name);
+    try {
+      const { error: saveErr } = await supabase.from("food_items").insert({
+        name: r.name,
+        calories: r.calories,
+        protein: r.protein,
+        carbs: r.carbs,
+        fat: r.fat,
+        serving_size: r.basis,
+      });
+      if (saveErr) throw new Error(saveErr.message);
+      loadSavedFoods();
+    } catch (err: unknown) {
+      setSearchError((err as Error).message);
+    } finally {
+      setSavingFood(null);
+    }
   }
 
   const mealOrder = ["breakfast", "lunch", "dinner", "snack"];
@@ -156,6 +215,46 @@ export default function FoodPage() {
         </div>
       </div>
 
+      {/* Food Database Search */}
+      <div className="bg-card p-5 rounded-lg border border-border">
+        <h2 className="font-semibold mb-3">Search Food Database</h2>
+        <form onSubmit={searchFoods} className="flex gap-2">
+          <input type="text" placeholder="e.g. greek yogurt" value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="flex-1 min-w-0 bg-background border border-border rounded px-3 py-2 text-foreground" />
+          <button type="submit" disabled={searching || !searchQuery.trim()}
+            className="bg-primary hover:bg-primary-hover disabled:opacity-50 text-white px-4 py-2 rounded transition shrink-0">
+            {searching ? "..." : "Search"}
+          </button>
+        </form>
+        {searchError && (
+          <p className="text-red-400 text-sm mt-2">{searchError}</p>
+        )}
+        {searched && !searching && searchResults.length === 0 && !searchError && (
+          <p className="text-muted text-sm mt-3">No results found. Try a different search or enter it manually below.</p>
+        )}
+        {searchResults.length > 0 && (
+          <div className="mt-3 space-y-1">
+            {searchResults.map((r, i) => (
+              <div key={i} className="flex items-center justify-between gap-2 py-2 border-b border-border/40 last:border-0">
+                <button onClick={() => useSearchResult(r)} className="flex-1 min-w-0 text-left hover:bg-background/60 rounded px-1 py-0.5 transition">
+                  <p className="text-sm font-medium truncate">{r.name}</p>
+                  <p className="text-xs text-muted">
+                    {r.calories} kcal · P {r.protein}g · C {r.carbs}g · F {r.fat}g <span className="opacity-70">({r.basis})</span>
+                  </p>
+                </button>
+                <button onClick={() => saveSearchResult(r)} disabled={savingFood === r.name}
+                  title="Save to my foods"
+                  className="text-muted hover:text-yellow-400 transition text-lg px-1 disabled:opacity-50 shrink-0">
+                  {savingFood === r.name ? "⏳" : "☆"}
+                </button>
+              </div>
+            ))}
+            <p className="text-xs text-muted pt-1">Tap a result to fill the form below · ☆ saves it for quick-add</p>
+          </div>
+        )}
+      </div>
+
       {/* Saved Foods Quick Add */}
       {savedFoods.length > 0 && (
         <div className="bg-card p-5 rounded-lg border border-border">
@@ -217,9 +316,9 @@ export default function FoodPage() {
           )}
 
           {/* Add Food Form */}
-          <div className="bg-card p-5 rounded-lg border border-border">
+          <div id="add-food-form" className="bg-card p-5 rounded-lg border border-border">
             <h2 className="font-semibold mb-3">Add Food</h2>
-            <FoodLogForm onSuccess={loadToday} />
+            <FoodLogForm onSuccess={loadToday} prefill={prefill} />
           </div>
         </>
       )}

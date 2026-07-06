@@ -1,10 +1,18 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
 const MEAL_TYPES = ["breakfast", "lunch", "dinner", "snack"] as const;
 
-export function FoodLogForm({ onSuccess }: { onSuccess?: () => void }) {
+export interface FoodPrefill {
+  name: string;
+  calories: number;
+  protein: number;
+  carbs: number;
+  fat: number;
+}
+
+export function FoodLogForm({ onSuccess, prefill }: { onSuccess?: () => void; prefill?: FoodPrefill | null }) {
   const [date, setDate] = useState(() => new Date().toISOString().split("T")[0]);
   const [mealType, setMealType] = useState("breakfast");
   const [foodName, setFoodName] = useState("");
@@ -14,6 +22,16 @@ export function FoodLogForm({ onSuccess }: { onSuccess?: () => void }) {
   const [fat, setFat] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (prefill) {
+      setFoodName(prefill.name);
+      setCalories(String(prefill.calories));
+      setProtein(String(prefill.protein));
+      setCarbs(String(prefill.carbs));
+      setFat(String(prefill.fat));
+    }
+  }, [prefill]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
