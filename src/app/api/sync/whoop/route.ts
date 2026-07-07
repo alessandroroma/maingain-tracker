@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { supabase } from "@/lib/supabase";
+import { supabaseServer as supabase } from "@/lib/supabase-server";
 
 // Pulls recovery + sleep from the WHOOP v2 API and upserts one
 // recovery_logs row per day (source: 'whoop'). Runs on a daily Vercel

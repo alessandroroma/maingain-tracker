@@ -1,6 +1,8 @@
 "use client";
 
 import Link from "next/link";
+import { usePathname } from "next/navigation";
+import { supabase } from "@/lib/supabase";
 
 const navItems = [
   { href: "/dashboard", label: "Dashboard" },
@@ -13,6 +15,14 @@ const navItems = [
 ];
 
 export function Nav() {
+  const pathname = usePathname();
+  if (pathname === "/login") return null;
+
+  async function signOut() {
+    await supabase.auth.signOut();
+    window.location.href = "/login";
+  }
+
   return (
     <nav className="border-b border-border bg-card/50 backdrop-blur sticky top-0 z-10">
       <div className="max-w-4xl mx-auto px-4">
@@ -26,6 +36,10 @@ export function Nav() {
               </Link>
             ))}
           </div>
+          <button onClick={signOut} title="Sign out"
+            className="ml-auto text-muted hover:text-foreground transition text-sm shrink-0">
+            ⎋
+          </button>
         </div>
       </div>
     </nav>

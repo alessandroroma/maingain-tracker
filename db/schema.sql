@@ -155,22 +155,23 @@ alter table program_exercises enable row level security;
 alter table weekly_checkins enable row level security;
 alter table recovery_logs enable row level security;
 
--- Policies: this is a single-user personal app with no auth.
--- The app connects with the anon key and never sets user_id, so policies
--- allow full access to the anon role. If you add Supabase Auth later,
--- replace these with `auth.uid() = user_id` policies and start setting
--- user_id on every insert.
-create policy "Allow all access" on users for all using (true) with check (true);
-create policy "Allow all access" on body_logs for all using (true) with check (true);
-create policy "Allow all access" on food_items for all using (true) with check (true);
-create policy "Allow all access" on food_logs for all using (true) with check (true);
-create policy "Allow all access" on exercises for all using (true) with check (true);
-create policy "Allow all access" on workouts for all using (true) with check (true);
-create policy "Allow all access" on workout_sets for all using (true) with check (true);
-create policy "Allow all access" on program_days for all using (true) with check (true);
-create policy "Allow all access" on program_exercises for all using (true) with check (true);
-create policy "Allow all access" on weekly_checkins for all using (true) with check (true);
-create policy "Allow all access" on recovery_logs for all using (true) with check (true);
+-- Policies: single-user app behind Supabase Auth. App tables are readable/
+-- writable by any authenticated user (there is only one); the anon role has
+-- no access. integration_tokens deliberately has NO policies — only the
+-- server-side secret key (which bypasses RLS) can touch it.
+alter table integration_tokens enable row level security;
+
+create policy "Authenticated access" on users for all to authenticated using (true) with check (true);
+create policy "Authenticated access" on body_logs for all to authenticated using (true) with check (true);
+create policy "Authenticated access" on food_items for all to authenticated using (true) with check (true);
+create policy "Authenticated access" on food_logs for all to authenticated using (true) with check (true);
+create policy "Authenticated access" on exercises for all to authenticated using (true) with check (true);
+create policy "Authenticated access" on workouts for all to authenticated using (true) with check (true);
+create policy "Authenticated access" on workout_sets for all to authenticated using (true) with check (true);
+create policy "Authenticated access" on program_days for all to authenticated using (true) with check (true);
+create policy "Authenticated access" on program_exercises for all to authenticated using (true) with check (true);
+create policy "Authenticated access" on weekly_checkins for all to authenticated using (true) with check (true);
+create policy "Authenticated access" on recovery_logs for all to authenticated using (true) with check (true);
 
 -- Seed: default exercises
 insert into exercises (name, muscle_group, equipment, default_rep_min, default_rep_max) values

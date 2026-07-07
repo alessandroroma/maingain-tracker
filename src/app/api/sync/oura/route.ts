@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { supabase } from "@/lib/supabase";
+import { supabaseServer as supabase } from "@/lib/supabase-server";
 
 // Pulls daily readiness, sleep score, and sleep-session details from the
 // Oura v2 API and upserts one recovery_logs row per day (source: 'oura').

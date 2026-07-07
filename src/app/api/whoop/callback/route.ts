@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { supabase } from "@/lib/supabase";
+import { supabaseServer as supabase } from "@/lib/supabase-server";
 
 // OAuth callback: exchanges the authorization code for tokens and stores
 // them in integration_tokens. WHOOP rotates refresh tokens, so the sync
